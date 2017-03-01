@@ -11,20 +11,49 @@
 
 module.exports.bootstrap = cb => {
 
-  Video.count().exec((err, numVideos) => {
-    if (err) {
-      return cb(err);
-    }
+    Video.count().exec((err, numVideos) => {
+        if (err) {
+            return cb(err);
+        }
 
-    if (numVideos > 0) {
-      console.log("Videos = " + numVideos);
-    } else {
-      console.log("There are no videos");
-    }
-  });
-  // TODO: Seed the database with videos from YouTube.
+        if (numVideos > 0) {
+            console.log("Videos = ", numVideos);
+        } else {
+            console.log("Seeding videos...");
 
-  // It's very important to trigger this callback method when you are finished
-  // with the bootstrap!  (otherwise your server will never lift, since it's waiting on the bootstrap)
-  cb();
+            const Youtube = require('machinepack-youtube');
+
+            // List Youtube videos which match the specified search query.
+            Youtube.searchVideos({
+                query: 'grumpy cat',
+                apiKey: sails.config.google.YOUTUBE_API_KEY,
+                limit: 15,
+            }).exec({
+                error: function (err) {
+                    console.log("An unexpected error occurred: ", err);
+                    return cb(err);
+                },
+                success: function (foundVideos) {
+                    foundVideos.forEach(video => {
+                        video.src = "https://www.youtube.com/embed/" + video.id;
+                        delete video.description;
+                        delete video.publishedAt;
+                        delete video.id;
+                        delete video.url;
+                    });
+
+                    Video.create(foundVideos).exec((err, videoRecordsCreated) => {
+                        if (err) {
+                            return cb(err);
+                        }
+
+                        console.log("Videos: ", videoRecordsCreated);
+                    });
+                },
+            });
+        }
+    });
+    // It's very important to trigger this callback method when you are finished
+    // with the bootstrap!  (otherwise your server will never lift, since it's waiting on the bootstrap)
+    cb();
 };
